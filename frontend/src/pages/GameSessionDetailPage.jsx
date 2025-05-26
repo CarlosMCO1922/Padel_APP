@@ -1,27 +1,37 @@
-import React, { useState, useEffect, useCallback } from 'react'; // Adicionado useCallback
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container, Typography, Box, CircularProgress, Alert, Paper,
-  Button, Grid, // Grid para layout do formulário de stats
-  FormControl, InputLabel, Select, MenuItem, // Para os dropdowns de stats
-  List, ListItem, ListItemText, Divider // Para listar stats existentes
+  Button, Grid,
+  FormControl, InputLabel, Select, MenuItem,
+  List, ListItem, ListItemText, Divider,
+  ToggleButton, ToggleButtonGroup, Switch, FormControlLabel
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'; // Ícone para registar stat
-import evaluationService from '../services/evaluationService'; // Mudar para evaluationService
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import evaluationService from '../services/evaluationService';
 import { format } from 'date-fns';
 
 // Valores para os Enums (devem corresponder ao backend)
 const statTypes = ['WINNER', 'FORCED_ERROR', 'UNFORCED_ERROR'];
 const strokeTypes = ['FOREHAND', 'BACKHAND', 'SMASH', 'VOLEIO_DIREITA', 'VOLEIO_ESQUERDA', 'BANDEJA', 'VIBORA', 'SAQUE', 'RESTA', 'GLOBO', 'OUTRO'];
 const pointOutcomes = ['GANHO', 'PERDIDO'];
+const PADEL_POINTS_DISPLAY = ["0", "15", "30", "40", "AD"]; // Para exibição e lógica de vantagens
 
 function GameSessionDetailPage() {
-  const { sessionId } = useParams(); // Mudar para sessionId
+  const { sessionId } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // --- ESTADOS PARA O SCORE E REGRA DE PONTO DE OURO ---
+  const [useGoldenPoint, setUseGoldenPoint] = useState(true); // Movido para dentro do componente
+  const [scoreTeam1, setScoreTeam1] = useState(PADEL_POINTS_DISPLAY[0]);
+  const [scoreTeam2, setScoreTeam2] = useState(PADEL_POINTS_DISPLAY[0]);
+  const [gamesTeam1, setGamesTeam1] = useState(0);
+  const [gamesTeam2, setGamesTeam2] = useState(0);
+  // TODO: Adicionar Sets se necessário
 
   // Estados para o formulário de nova estatística
   const [newStat, setNewStat] = useState({
@@ -33,14 +43,70 @@ function GameSessionDetailPage() {
   const [statFormError, setStatFormError] = useState('');
   const [statFormLoading, setStatFormLoading] = useState(false);
 
-  // Usamos useCallback para evitar recriações desnecessárias da função
+  // --- LÓGICA DE ATUALIZAÇÃO DE SCORE ---
+  const updateScore = (teamThatWonPoint) => { // teamThatWonPoint é 1 ou 2
+    let currentPointsWinner, setCurrentPointsWinner, currentPointsLoser, setCurrentPointsLoser;
+    let currentGamesWinner, setCurrentGamesWinner;
+
+    if (teamThatWonPoint === 1) {
+        currentPointsWinner = scoreTeam1; setCurrentPointsWinner = setScoreTeam1;
+        currentPointsLoser = scoreTeam2; setCurrentPointsLoser = setScoreTeam2;
+        currentGamesWinner = gamesTeam1; setCurrentGamesWinner = setGamesTeam1;
+    } else { // teamThatWonPoint === 2
+        currentPointsWinner = scoreTeam2; setCurrentPointsWinner = setScoreTeam2;
+        currentPointsLoser = scoreTeam1; setCurrentPointsLoser = setScoreTeam1;
+        currentGamesWinner = gamesTeam2; setCurrentGamesWinner = setGamesTeam2;
+    }
+
+    let newWinnerDisplayScore = currentPointsWinner;
+    let newLoserDisplayScore = currentPointsLoser;
+
+    if (currentPointsWinner === "0") newWinnerDisplayScore = "15";
+    else if (currentPointsWinner === "15") newWinnerDisplayScore = "30";
+    else if (currentPointsWinner === "30") newWinnerDisplayScore = "40";
+    else if (currentPointsWinner === "40") {
+        if (currentPointsLoser === "40") { // Estava 40-40
+            if (useGoldenPoint) {
+                newWinnerDisplayScore = "GAME";
+            } else {
+                newWinnerDisplayScore = "AD";
+            }
+        } else if (currentPointsLoser === "AD") { // Estava 40-AD, quem pontuou fez o 40-40
+             if (!useGoldenPoint) { // Só acontece se não for ponto de ouro
+                newWinnerDisplayScore = "40"; // Volta para 40
+                newLoserDisplayScore = "40";  // Adversário também volta para 40
+             } else { // No Ponto de Ouro, não deveria chegar a 40-AD
+                newWinnerDisplayScore = "GAME"; // Segurança: Se chegou aqui no Ponto de Ouro, é jogo
+             }
+        } else { // Estava 40-0, 40-15, 40-30
+            newWinnerDisplayScore = "GAME";
+        }
+    } else if (currentPointsWinner === "AD") { // Estava AD-40
+         if (!useGoldenPoint) {
+            newWinnerDisplayScore = "GAME";
+         }  // No Ponto de Ouro, não deveria chegar a AD
+    }
+
+    if (newWinnerDisplayScore === "GAME") {
+        setCurrentPointsWinner(PADEL_POINTS_DISPLAY[0]); // Reset para "0"
+        setCurrentPointsLoser(PADEL_POINTS_DISPLAY[0]);  // Reset para "0"
+        setCurrentGamesWinner(prevGames => prevGames + 1);
+        console.log(`Equipa ${teamThatWonPoint} ganhou o jogo! Jogos: ${currentGamesWinner + 1}`);
+    } else {
+        setCurrentPointsWinner(newWinnerDisplayScore);
+        if (newLoserDisplayScore !== currentPointsLoser) {
+             setCurrentPointsLoser(newLoserDisplayScore);
+        }
+    }
+  };
+
+
   const fetchSessionDetails = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const data = await evaluationService.getGameSessionById(sessionId);
       setSession(data);
-      // Se houver alunos, pré-seleciona o primeiro para o formulário de stat
       if (data && data.students && data.students.length > 0) {
         setNewStat(prev => ({ ...prev, studentId: data.students[0].studentId }));
       }
@@ -49,16 +115,17 @@ function GameSessionDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [sessionId]); // Dependência do sessionId
+  }, [sessionId]);
 
   useEffect(() => {
     if (sessionId) {
       fetchSessionDetails();
     }
-  }, [sessionId, fetchSessionDetails]); // Adiciona fetchSessionDetails às dependências
+  }, [sessionId, fetchSessionDetails]);
 
   const handleNewStatChange = (e) => {
-    setNewStat(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setNewStat(prev => ({ ...prev, [name]: value }));
     setStatFormError('');
   };
 
@@ -72,15 +139,29 @@ function GameSessionDetailPage() {
     setStatFormError('');
     try {
       await evaluationService.addStatToSession(sessionId, newStat);
-      // Limpa o formulário (exceto talvez o studentId se quisermos registar várias para o mesmo)
+      
+      // Atualiza o score baseado no resultado do ponto
+      // Assumindo que 'point_outcome' se refere ao resultado do ponto para o 'studentId' selecionado
+      if (newStat.point_outcome === 'GANHO') {
+        // Precisamos determinar a equipa do studentId. Por agora, simplificamos.
+        // Se tivermos uma forma de mapear studentId para equipa 1 ou 2, usamos isso.
+        // Exemplo: se studentId for da equipa 1, chamamos updateScore(1)
+        // Por agora, assumimos que "GANHO" pelo aluno selecionado é para "Equipa 1" (placeholder)
+        console.log("Ponto GANHO pelo aluno selecionado, incrementando Equipa 1");
+        updateScore(1); 
+      } else if (newStat.point_outcome === 'PERDIDO') {
+        // Se o aluno selecionado perdeu o ponto (ex: cometeu um erro), a outra equipa ganha.
+        console.log("Ponto PERDIDO pelo aluno selecionado, incrementando Equipa 2");
+        updateScore(2);
+      }
+
       setNewStat(prev => ({
-        ...prev, // Mantém o studentId selecionado
+        ...prev, 
         stat_type: '',
         stroke_type: '',
         point_outcome: '',
       }));
-      // Recarrega os detalhes da sessão para ver a nova estatística
-      fetchSessionDetails();
+      fetchSessionDetails(); 
     } catch (err) {
       setStatFormError(err.response?.data?.message || "Erro ao registar estatística.");
     } finally {
@@ -88,30 +169,26 @@ function GameSessionDetailPage() {
     }
   };
 
-
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
   }
-
   if (error) {
     return <Container sx={{mt: 2}}><Alert severity="error">{error}</Alert></Container>;
   }
-
   if (!session) {
     return <Container sx={{mt: 2}}><Alert severity="warning">Sessão de avaliação não encontrada.</Alert></Container>;
   }
 
-  // Extrai os alunos da sessão para o dropdown
   const participatingStudents = session.students?.map(s => s.student) || [];
 
   return (
-    <Container maxWidth="lg"> {/* Aumentado para lg para mais espaço */}
+    <Container maxWidth="lg">
       <Box sx={{ my: 4 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/sessions')} sx={{ mb: 2 }}>
           Voltar para Sessões
         </Button>
 
-        <Paper sx={{ p: {xs: 2, md: 3}, mb: 3 }}> {/* Padding responsivo */}
+        <Paper sx={{ p: {xs: 2, md: 3}, mb: 3 }}>
           <Typography variant="h4" component="h1" gutterBottom>
             Detalhes da Sessão de Avaliação
           </Typography>
@@ -132,57 +209,104 @@ function GameSessionDetailPage() {
           </List>
         </Paper>
 
+        {/* Opção de Ponto de Ouro e Score Display */}
+        <Paper sx={{ p: { xs: 2, md: 3 }, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 2, flexDirection: {xs: 'column', sm: 'row'} }}>
+                <FormControlLabel
+                    control={
+                    <Switch
+                        checked={useGoldenPoint}
+                        onChange={(e) => setUseGoldenPoint(e.target.checked)}
+                        name="useGoldenPointSwitch"
+                        color="primary"
+                    />
+                    }
+                    label="Usar Ponto de Ouro (em 40-40)"
+                />
+            </Box>
+            <Typography variant="h5" component="h2" gutterBottom align="center">
+                Pontuação do Jogo
+            </Typography>
+            <Grid container spacing={1} justifyContent="center" alignItems="center" textAlign="center">
+                <Grid item xs={5}>
+                    <Typography variant="h3">{gamesTeam1}</Typography>
+                    <Typography variant={scoreTeam1 === "AD" ? "h4" : "h3"} color={scoreTeam1 === "AD" ? "success.main" : "inherit"}>
+                        {scoreTeam1}
+                    </Typography>
+                    <Typography variant="caption">Equipa 1</Typography>
+                </Grid>
+                <Grid item xs={2}><Typography variant="h3">-</Typography></Grid>
+                <Grid item xs={5}>
+                    <Typography variant="h3">{gamesTeam2}</Typography>
+                    <Typography variant={scoreTeam2 === "AD" ? "h4" : "h3"} color={scoreTeam2 === "AD" ? "success.main" : "inherit"}>
+                        {scoreTeam2}
+                    </Typography>
+                    <Typography variant="caption">Equipa 2</Typography>
+                </Grid>
+            </Grid>
+        </Paper>
+
+
         {/* Formulário para Registar Nova Estatística */}
         <Paper sx={{ p: {xs: 2, md: 3}, mb: 3 }}>
           <Typography variant="h5" component="h2" gutterBottom>
-            Registar Nova Estatística
+            Registar Novo Ponto/Jogada
           </Typography>
           <Box component="form" onSubmit={handleRegisterStat} noValidate>
             {statFormError && <Alert severity="error" sx={{ mb: 2 }}>{statFormError}</Alert>}
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12}>
                 <FormControl fullWidth variant="outlined" disabled={statFormLoading || participatingStudents.length === 0}>
-                  <InputLabel id="student-select-label">Aluno *</InputLabel>
+                  <InputLabel id="student-select-label">Aluno da Jogada *</InputLabel>
                   <Select
                     labelId="student-select-label"
                     name="studentId"
                     value={newStat.studentId}
                     onChange={handleNewStatChange}
-                    label="Aluno *"
+                    label="Aluno da Jogada *"
                   >
-                    {participatingStudents.map(s => (
-                      <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                    {participatingStudents.map(s => ( <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem> ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="caption" display="block" gutterBottom>Tipo de Ponto/Erro *</Typography>
+                <ToggleButtonGroup value={newStat.stat_type} exclusive
+                  onChange={(event, newStatType) => { if (newStatType !== null) { setNewStat(prev => ({ ...prev, stat_type: newStatType })); setStatFormError('');}}}
+                  aria-label="tipo de estatística" fullWidth disabled={statFormLoading}
+                >
+                  {statTypes.map(type => ( <ToggleButton value={type} key={type} sx={{ flexGrow: 1 }}>{type.replace('_', ' ')}</ToggleButton> ))}
+                </ToggleButtonGroup>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="caption" display="block" gutterBottom>Pancada Executada *</Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Grid container spacing={1}>
+                    {strokeTypes.map((type) => (
+                      <Grid item xs={6} sm={4} md={2} key={type}>
+                        <ToggleButton value={type} selected={newStat.stroke_type === type}
+                          onChange={() => { setNewStat(prev => ({ ...prev, stroke_type: type })); setStatFormError(''); }}
+                          sx={{ width: '100%', textTransform: 'none', height: '56px' }} disabled={statFormLoading}
+                        >
+                          {type.replace('_', ' ').charAt(0).toUpperCase() + type.replace('_', ' ').slice(1).toLowerCase()}
+                        </ToggleButton>
+                      </Grid>
                     ))}
-                  </Select>
-                </FormControl>
+                  </Grid>
+                </Box>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth variant="outlined" disabled={statFormLoading}>
-                  <InputLabel id="stat-type-label">Tipo de Estatística *</InputLabel>
-                  <Select labelId="stat-type-label" name="stat_type" value={newStat.stat_type} onChange={handleNewStatChange} label="Tipo de Estatística *">
-                    {statTypes.map(type => (<MenuItem key={type} value={type}>{type.replace('_', ' ')}</MenuItem>))}
-                  </Select>
-                </FormControl>
+              <Grid item xs={12}>
+                <Typography variant="caption" display="block" gutterBottom>Quem Ganhou o Ponto? *</Typography>
+                <ToggleButtonGroup value={newStat.point_outcome} exclusive
+                  onChange={(event, newPointOutcome) => { if (newPointOutcome !== null) { setNewStat(prev => ({ ...prev, point_outcome: newPointOutcome })); setStatFormError(''); }}}
+                  aria-label="resultado do ponto" fullWidth disabled={statFormLoading}
+                >
+                  {pointOutcomes.map(type => ( <ToggleButton value={type} key={type} sx={{ flexGrow: 1 }}> Ponto {type.toLowerCase()} (pelo aluno da jogada) </ToggleButton> ))}
+                </ToggleButtonGroup>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth variant="outlined" disabled={statFormLoading}>
-                  <InputLabel id="stroke-type-label">Pancada *</InputLabel>
-                  <Select labelId="stroke-type-label" name="stroke_type" value={newStat.stroke_type} onChange={handleNewStatChange} label="Pancada *">
-                    {strokeTypes.map(type => (<MenuItem key={type} value={type}>{type.replace('_', ' ')}</MenuItem>))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth variant="outlined" disabled={statFormLoading}>
-                  <InputLabel id="point-outcome-label">Resultado do Ponto *</InputLabel>
-                  <Select labelId="point-outcome-label" name="point_outcome" value={newStat.point_outcome} onChange={handleNewStatChange} label="Resultado do Ponto *">
-                    {pointOutcomes.map(type => (<MenuItem key={type} value={type}>{type}</MenuItem>))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sx={{textAlign: 'right'}}>
-                <Button type="submit" variant="contained" startIcon={<AddCircleOutlineIcon/>} disabled={statFormLoading} sx={{mt:1}}>
-                  {statFormLoading ? <CircularProgress size={24} /> : 'Registar Ponto'}
+              <Grid item xs={12} sx={{ textAlign: 'center', mt: 2 }}>
+                <Button type="submit" variant="contained" size="large" startIcon={<AddCircleOutlineIcon/>} disabled={statFormLoading}>
+                  {statFormLoading ? <CircularProgress size={24} color="inherit" /> : 'Registar Jogada'}
                 </Button>
               </Grid>
             </Grid>

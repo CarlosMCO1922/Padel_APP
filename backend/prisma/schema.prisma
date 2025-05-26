@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Garante que está postgresql
+  url      = env("DATABASE_URL")
+}
+
+model Trainer {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String
+  password    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  students    Student[] 
+  exercises   Exercise[] 
+  PracticePlans PracticePlan[]
+  GameSessions GameSession[]
+}
+
+model Student {
+  id           String   @id @default(uuid())
+  name         String
+  contact_info String?
+  skill_level  String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  trainer      Trainer  @relation(fields: [trainerId], references: [id])
+  trainerId    String
+  GameSessionStudents GameSessionStudent[]
+  Stats               Stat[] 
+}
+
+enum ExerciseType {
+  TECNICO
+  TATICO
+  FISICO
+  AQUECIMENTO
+  VOLTA_A_CALMA
+}
+
+model Exercise {
+  id                 String       @id @default(uuid())
+  name               String
+  description        String?
+  type               ExerciseType // Usa o nosso Enum
+  duration_minutes   Int?         // Duração sugerida (opcional)
+  material           String?      // Material necessário (opcional)
+  tactical_board_data Json?        // Para guardar os dados da prancheta (JSON)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  // Relação com o Treinador (cada treinador tem os seus exercícios)
+  trainer            Trainer      @relation(fields: [trainerId], references: [id])
+  trainerId          String
+
+  // Relação com Planos de Treino (um exercício pode estar em vários planos)
+  PracticePlanExercises PracticePlanExercise[]
+}
+
+model PracticePlan {
+  id           String       @id @default(uuid())
+  title        String
+  date         DateTime
+  duration_minutes Int?
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  trainer      Trainer      @relation(fields: [trainerId], references: [id])
+  trainerId    String
+
+  // Relação com Exercícios (Muitos-para-Muitos)
+  PracticePlanExercises PracticePlanExercise[]
+  // Relação com Alunos (Muitos-para-Muitos) - A implementar se necessário
+}
+
+// Tabela de Junção para Planos e Exercícios
+model PracticePlanExercise {
+  id           String    @id @default(uuid())
+  practicePlan PracticePlan @relation(fields: [practicePlanId], references: [id])
+  practicePlanId String
+  exercise     Exercise  @relation(fields: [exerciseId], references: [id])
+  exerciseId   String
+  order        Int       // Ordem do exercício no plano
+  sets         Int?
+  reps         String?   // Pode ser "10", "2 min", etc.
+  rest_seconds Int?
+
+  @@unique([practicePlanId, exerciseId, order]) // Garante combinação única
+}
+
+enum StatType {
+  WINNER
+  FORCED_ERROR
+  UNFORCED_ERROR
+}
+
+enum StrokeType {
+  FOREHAND
+  BACKHAND
+  SMASH
+  VOLEIO_DIREITA
+  VOLEIO_ESQUERDA
+  BANDEJA
+  VIBORA
+  SAQUE
+  RESTA
+  GLOBO
+  OUTRO
+}
+
+enum PointOutcome {
+  GANHO
+  PERDIDO
+}
+
+
+
+model GameSession {
+  id        String   @id @default(uuid())
+  date      DateTime @default(now())
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trainer   Trainer  @relation(fields: [trainerId], references: [id])
+  trainerId String
+
+  // Relação Muitos-para-Muitos com Alunos
+  students  GameSessionStudent[]
+  // Relação Um-para-Muitos com Estatísticas
+  stats     Stat[]
+}
+
+// Tabela de Junção para Sessões e Alunos
+model GameSessionStudent {
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade) // Apaga se a sessão for apagada
+  gameSessionId String
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade) // Apaga se o aluno for apagado
+  studentId     String
+
+  @@id([gameSessionId, studentId]) // Chave primária composta
+}
+
+model Stat {
+  id            String       @id @default(uuid())
+  timestamp     DateTime     @default(now())
+  stat_type     StatType
+  stroke_type   StrokeType
+  point_outcome PointOutcome
+
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade) // Apaga se a sessão for apagada
+  gameSessionId String
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade) // Apaga se o aluno for apagado
+  studentId     String
+}

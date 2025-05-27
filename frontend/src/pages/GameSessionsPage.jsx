@@ -1,12 +1,13 @@
+// frontend/src/pages/GameSessionsPage.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Container, Typography, Box, Button, CircularProgress, Alert,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  IconButton
+  IconButton, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-// import DeleteIcon from '@mui/icons-material/Delete'; // Para depois
+import DeleteIcon from '@mui/icons-material/Delete'; // Importa o ícone de apagar
 import evaluationService from '../services/evaluationService';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -16,6 +17,13 @@ function GameSessionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  // Estados para o modal de confirmação de eliminação
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
 
   const loadSessions = async () => {
     setLoading(true);
@@ -35,13 +43,38 @@ function GameSessionsPage() {
   }, []);
 
   const handleNavigateToNewSession = () => {
-    // Navegaremos para uma nova página para criar/iniciar a sessão
     navigate('/sessions/new');
   };
 
   const handleViewSessionDetails = (sessionId) => {
-    // Navegaremos para uma página para ver os detalhes e stats da sessão
     navigate(`/sessions/${sessionId}`);
+  };
+
+  // Handlers para apagar sessão
+  const handleOpenDeleteModal = (session) => {
+    setSessionToDelete(session);
+    setDeleteError('');
+    setDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setSessionToDelete(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!sessionToDelete) return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await evaluationService.deleteGameSession(sessionToDelete.id);
+      setDeleteLoading(false);
+      handleCloseDeleteModal();
+      loadSessions(); // Recarrega a lista de sessões
+    } catch (err) {
+      setDeleteError(err.response?.data?.message || 'Erro ao apagar sessão.');
+      setDeleteLoading(false);
+    }
   };
 
   return (
@@ -97,9 +130,13 @@ function GameSessionsPage() {
                         <IconButton color="default" onClick={() => handleViewSessionDetails(session.id)} aria-label="ver detalhes">
                             <VisibilityIcon />
                         </IconButton>
-                        {/* <IconButton color="error" onClick={() => {}} aria-label="apagar">
-                          <DeleteIcon />
-                        </IconButton> */}
+                        <IconButton
+                            color="error" // Cor para o botão de apagar
+                            onClick={() => handleOpenDeleteModal(session)}
+                            aria-label="apagar sessão"
+                        >
+                            <DeleteIcon />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))
@@ -109,7 +146,26 @@ function GameSessionsPage() {
           </TableContainer>
         )}
       </Box>
-      {/* TODO: Modal/Página para Adicionar/Realizar Sessão */}
+
+      {/* Modal de Confirmação de Eliminação de Sessão */}
+      {sessionToDelete && (
+        <Dialog open={deleteModalOpen} onClose={handleCloseDeleteModal}>
+          <DialogTitle>Confirmar Eliminação da Sessão</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Tem a certeza que deseja apagar a sessão de {format(new Date(sessionToDelete.date), 'dd/MM/yyyy')}?
+              Todas as estatísticas associadas serão perdidas permanentemente.
+            </DialogContentText>
+            {deleteError && <Alert severity="error" sx={{ mt: 2 }}>{deleteError}</Alert>}
+          </DialogContent>
+          <DialogActions sx={{p:2}}>
+            <Button onClick={handleCloseDeleteModal} disabled={deleteLoading}>Cancelar</Button>
+            <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleteLoading}>
+              {deleteLoading ? <CircularProgress size={24} /> : 'Apagar Sessão'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Container>
   );
 }

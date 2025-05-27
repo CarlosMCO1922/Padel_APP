@@ -18,26 +18,83 @@ import Layout from './components/Layout';
 
 function App() {
   const { token } = useAuth(); // Obtém o token para redirecionamento inicial
+  const padelCourtBlue = '#0D6E9F'; // Um azul usado em campos WPT
+  const padelBallYellow = '#FFFF00'; // Amarelo vivo (pode ser ajustado)
+  const padelAccentGreen = '#9CCC65'; // Um verde-limão alternativo
 
-  const darkTheme = createTheme({
+const darkTheme = createTheme({
   palette: {
-    mode: 'dark', // Isto ativa o modo escuro
-    // Podes personalizar outras cores aqui se quiseres
-    // primary: {
-    //   main: '#90caf9', // Exemplo de cor primária para modo escuro
-    // },
-    // secondary: {
-    //   main: '#f48fb1', // Exemplo de cor secundária para modo escuro
-    // },
-    // background: {
-    //   default: '#121212', // Cor de fundo padrão do Material Design para dark mode
-    //   paper: '#1e1e1e',   // Cor para superfícies como Paper, Card, etc.
-    // },
+    mode: 'dark',
+    primary: {
+      main: padelCourtBlue, // Cor principal será o azul
+    },
+    secondary: {
+      main: padelBallYellow, // Cor secundária será o amarelo/verde
+    },
+    background: {
+      default: '#121212', // Fundo escuro padrão
+      paper: '#1E1E1E',   // Cor para os 'Paper' (caixas, etc.)
+    },
+    text: {
+      primary: '#FFFFFF', // Texto branco para contraste máximo
+      secondary: '#BDBDBD', // Cinzento claro para texto secundário
+    },
+    success: {
+        main: padelAccentGreen, // Usar o verde para sucesso
+    },
+    // Podes ajustar error e warning se quiseres
   },
-  // Podes também personalizar tipografia, espaçamentos, etc.
-  // typography: {
-  //   fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-  // },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h4: { fontWeight: 600, color: '#FFFFFF' }, // Títulos mais fortes e brancos
+    h5: { fontWeight: 500, color: '#E0E0E0' },
+    h6: { fontWeight: 500, color: '#CCCCCC' },
+    caption: { color: '#A0A0A0' }, // Legendas um pouco mais subtis
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          textTransform: 'none',
+          fontWeight: 'bold',
+        },
+        containedSecondary: { // Para botões amarelos, texto escuro fica melhor
+            color: '#000000',
+        }
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none', // Garante que não há gradientes estranhos no dark mode
+          border: '1px solid rgba(255, 255, 255, 0.08)', // Uma borda subtil
+        }
+      }
+    },
+    MuiToggleButton: {
+        styleOverrides: {
+            root: {
+                textTransform: 'none',
+                '&.Mui-selected': { // Estilo para botões selecionados
+                    backgroundColor: padelBallYellow,
+                    color: '#000', // Texto preto para contraste com amarelo
+                    '&:hover': {
+                        backgroundColor: '#FDD835', // Um amarelo um pouco mais escuro no hover
+                    }
+                }
+            }
+        }
+    },
+     MuiTableCell: {
+        styleOverrides: {
+            head: { // Cabeçalho das tabelas
+                backgroundColor: '#252525',
+                fontWeight: 'bold',
+            }
+        }
+     }
+  }
 });
 
   return (

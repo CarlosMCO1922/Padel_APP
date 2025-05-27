@@ -48,13 +48,35 @@ const addStatToSession = async (sessionId, statData) => {
     }
 };
 
-// TODO: Adicionar deleteGameSession se necessário
+// Apagar uma sessão de jogo
+const deleteGameSession = async (sessionId) => {
+    try {
+        const response = await axios.delete(API_URL + sessionId); // O token é enviado globalmente pelo AuthContext
+        return response.data;
+    } catch (error) {
+        console.error("Erro ao apagar sessão de jogo:", error);
+        throw error.response?.data?.message || "Erro ao apagar sessão de jogo";
+    }
+};
+
+// Apagar a última estatística de uma sessão
+const deleteLastStatFromSession = async (sessionId) => {
+    try {
+        const response = await axios.delete(`<span class="math-inline">\{API\_URL\}</span>{sessionId}/stats/last`); // O token é enviado globalmente
+        return response.data;
+    } catch (error) {
+        console.error("Erro ao apagar última estatística:", error);
+        throw error.response?.data?.message || "Erro ao apagar última estatística";
+    }
+};
 
 const evaluationService = {
     createGameSession,
     getGameSessions,
     getGameSessionById,
     addStatToSession,
+    deleteGameSession,
+    deleteLastStatFromSession,
 };
 
 export default evaluationService;

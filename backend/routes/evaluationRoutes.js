@@ -118,6 +118,77 @@ router.post('/:sessionId/stats', protect, async (req, res) => {
     }
 });
 
-// TODO: Adicionar rotas DELETE para Sessões e talvez para Stats
+// DELETE /api/sessions/:sessionId - Apagar uma sessão de jogo específica
+router.delete('/:sessionId', protect, async (req, res) => {
+    const { sessionId } = req.params;
+
+    try {
+        // Verifica se a sessão existe e pertence ao treinador logado
+        const session = await prisma.gameSession.findUnique({
+            where: { id: sessionId },
+        });
+
+        if (!session || session.trainerId !== req.user.id) {
+            return res.status(404).json({ message: 'Sessão não encontrada ou não autorizado.' });
+        }
+
+        // Apagar primeiro as entradas dependentes (GameSessionStudent e Stat)
+        // ou confiar no onDelete: Cascade definido no schema.
+        // Se onDelete: Cascade está no schema para GameSessionStudent e Stat em relação a GameSession,
+        // o Prisma trata disso. Vamos confirmar.
+        // No schema, Stat e GameSessionStudent têm onDelete: Cascade. Ótimo.
+
+        await prisma.gameSession.delete({
+            where: { id: sessionId },
+        });
+
+        res.status(200).json({ message: 'Sessão de avaliação apagada com sucesso.' });
+    } catch (error) {
+        console.error("Erro ao apagar sessão de avaliação:", error);
+        // P2003: Foreign key constraint failed on the field: `Stat_gameSessionId_fkey (index)`
+        // ou similar se houver dependências não tratadas por cascade
+        if (error.code === 'P2003') {
+             return res.status(409).json({ message: 'Não é possível apagar. Verifique dependências.' });
+        }
+        res.status(500).json({ message: 'Erro interno ao apagar a sessão.' });
+    }
+});
+
+// DELETE /api/sessions/:sessionId/stats/last - Apagar a última estatística registada para uma sessão
+router.delete('/:sessionId/stats/last', protect, async (req, res) => {
+    const { sessionId } = req.params;
+
+    try {
+        // Verifica se a sessão existe e pertence ao treinador logado
+        const session = await prisma.gameSession.findUnique({
+            where: { id: sessionId },
+        });
+
+        if (!session || session.trainerId !== req.user.id) {
+            return res.status(404).json({ message: 'Sessão não encontrada ou não autorizado.' });
+        }
+
+        // Encontra a estatística mais recente para esta sessão
+        const lastStat = await prisma.stat.findFirst({
+            where: { gameSessionId: sessionId },
+            orderBy: { timestamp: 'desc' }, // Assume que 'timestamp' ou 'createdAt' regista a ordem
+        });
+
+        if (!lastStat) {
+            return res.status(404).json({ message: 'Nenhuma estatística encontrada para apagar nesta sessão.' });
+        }
+
+        // Apaga a última estatística encontrada
+        await prisma.stat.delete({
+            where: { id: lastStat.id },
+        });
+
+        res.status(200).json({ message: 'Última estatística apagada com sucesso.', deletedStatId: lastStat.id });
+
+    } catch (error) {
+        console.error("Erro ao apagar última estatística:", error);
+        res.status(500).json({ message: 'Erro interno ao apagar a última estatística.' });
+    }
+});
 
 module.exports = router;

@@ -10,6 +10,7 @@ const exerciseRoutes = require('./routes/exerciseRoutes');
 const practicePlanRoutes = require('./routes/practicePlanRoutes');
 const evaluationRoutes = require('./routes/evaluationRoutes');
 
+const path = require('path');
 const prisma = new PrismaClient(); // Cria uma instância do PrismaClient
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,6 +19,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use('/api/students', studentRoutes);
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 // Rota de Teste
 app.get('/', (req, res) => {
@@ -130,6 +132,10 @@ app.use('/api/exercises', exerciseRoutes);
 // --- ROTAS DE PLANOS DE TREINO ---
 app.use('/api/plans', practicePlanRoutes);
 app.use('/api/sessions', evaluationRoutes);
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
 
 // Iniciar o Servidor
 app.listen(PORT, () => {

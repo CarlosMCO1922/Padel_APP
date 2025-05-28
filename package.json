@@ -7,7 +7,10 @@
     "date-fn": "^0.0.2",
     "date-fns": "^4.1.0"
   },
-  "scripts":{
-    "start-repl": "cd backend && node server.js"
+  "scripts": {
+    "install-all": "echo 'Instalando dependências do Backend...' && cd backend && npm install && cd .. && echo 'Instalando dependências do Frontend...' && cd frontend && npm install && cd ..",
+    "build-frontend": "echo 'Fazendo build do Frontend...' && cd frontend && npm run build && cd ..",
+    "prepare-backend": "echo 'Preparando Backend (Prisma Generate & Migrate)...' && cd backend && npx prisma generate && npx prisma migrate deploy && cd ..",
+    "start-app": "echo 'A iniciar Backend...' && cd backend && npm start"
   }
 }
